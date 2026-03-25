@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
 export async function createSupabaseAuthClient() {
-  // В Next.js 15 cookies() — это Promise
   const cookieStore = await cookies();
 
   return createServerClient(
@@ -19,7 +18,7 @@ export async function createSupabaseAuthClient() {
               cookieStore.set(name, value, options);
             });
           } catch {
-            // В Route Handlers установка кук может не сработать, если заголовки уже отправлены
+            
           }
         },
       },
