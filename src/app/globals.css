@@ -118,6 +118,10 @@
 }
 
 @layer base {
+  :root {
+    --font-sans: "Geist Sans", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+  }
   * {
     @apply border-border outline-ring/50;
   }
