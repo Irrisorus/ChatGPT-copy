@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ChatInput } from "@/components/chat-input"; 
+import { ChatInput } from "@/components/ChatInput"; 
 import { cn } from "@/lib/utils";
 
 const mockMessages = [
