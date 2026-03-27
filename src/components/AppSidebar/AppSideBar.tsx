@@ -10,6 +10,8 @@ import {
     SidebarGroup,
     SidebarGroupLabel,
     SidebarGroupContent,
+    SidebarMenuButton,
+    SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
 import { useChats } from "@/hooks/use-chats";
@@ -20,6 +22,7 @@ import { SidebarChatItem } from "./SidebarChatItem";
 import { SidebarChatsSkeleton } from "./SidebarChatsSkeleton";
 import { SidebarUserSection } from "./SidebarUserSection";
 import { useAuth } from "../providers/auth-provider";
+import { MessageSquareDashed } from "lucide-react";
 
 export function AppSidebar() {
     const { chats, isLoading, createChat, isCreating } = useChats();
@@ -36,9 +39,9 @@ export function AppSidebar() {
     return (
         <Sidebar variant="sidebar" collapsible="icon" className="border-r">
             <SidebarHeader className="pt-4">
-                <SidebarNewChatButton 
-                    onClick={() => createChat("Новый чат")} 
-                    isLoading={isCreating} 
+                <SidebarNewChatButton
+                    onClick={() => createChat("Новый чат")}
+                    isLoading={isCreating}
                 />
             </SidebarHeader>
 
@@ -51,17 +54,25 @@ export function AppSidebar() {
                                 <SidebarChatsSkeleton />
                             ) : chats && chats.length > 0 ? (
                                 chats.map((chat) => (
-                                    <SidebarChatItem 
+                                    <SidebarChatItem
                                         key={chat.id}
                                         id={chat.id}
-                                        title={chat.title??"Новый чат"}
+                                        title={chat.title ?? "Новый чат"}
                                         isActive={params.id === chat.id}
                                     />
                                 ))
                             ) : (
-                                <div className="px-4 py-4 text-center text-xs text-muted-foreground italic">
-                                    Чатов пока нет
-                                </div>
+                                <SidebarMenuItem>
+                                    <SidebarMenuButton
+                                        disabled
+                                        className="group-data-[collapsible=icon]:justify-center"
+                                    >
+                                        <MessageSquareDashed className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                                        <span className="text-xs text-muted-foreground italic truncate">
+                                            Чатов пока нет
+                                        </span>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
                             )}
                         </SidebarMenu>
                     </SidebarGroupContent>
@@ -69,9 +80,9 @@ export function AppSidebar() {
             </SidebarContent>
 
             <SidebarFooter className="py-4">
-                <SidebarUserSection 
-                    user={user} 
-                    onLogout={handleLogout} 
+                <SidebarUserSection
+                    user={user}
+                    onLogout={handleLogout}
                 />
             </SidebarFooter>
         </Sidebar>

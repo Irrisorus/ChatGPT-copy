@@ -28,12 +28,37 @@ export function useMessages(chatId: string) {
   const messagesQuery = useQuery({
     queryKey: ["messages", chatId],
     queryFn: () => fetchMessages(chatId),
-    enabled: !!chatId, 
+    enabled: !!chatId,
   });
 
   const sendMessageMutation = useMutation({
     mutationFn: sendMessage,
-    onSuccess: () => {
+    
+    onMutate: async (newMessage) => {
+      await queryClient.cancelQueries({ queryKey: ["messages", chatId] });
+      const previousMessages = queryClient.getQueryData<Message[]>(["messages", chatId]);
+      queryClient.setQueryData<Message[]>(["messages", chatId], (old = []) => [
+        ...old,
+        {
+          id: crypto.randomUUID(),
+          chat_id: chatId,
+          role: "user",
+          content: newMessage.content,
+          created_at: new Date().toISOString(),
+        } as Message,
+      ]);
+
+      return { previousMessages };
+    },
+
+    onError: (err, newMessage, context) => {
+      if (context?.previousMessages) {
+        queryClient.setQueryData(["messages", chatId], context.previousMessages);
+      }
+      // TODO: add toast
+    },
+
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
       queryClient.invalidateQueries({ queryKey: ["chats"] });
     },
@@ -42,7 +67,6 @@ export function useMessages(chatId: string) {
   return {
     messages: messagesQuery.data || [],
     isLoading: messagesQuery.isLoading,
-    error: messagesQuery.error,
     sendMessage: sendMessageMutation.mutate,
     isSending: sendMessageMutation.isPending,
   };
