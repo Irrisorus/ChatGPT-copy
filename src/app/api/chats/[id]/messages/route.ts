@@ -14,6 +14,13 @@ type RouteParams = {
 export async function GET(request: Request, { params }: RouteParams) {
   try {
     const { id: chatId } = await params;
+    const url = new URL(request.url);
+    const page = parseInt(url.searchParams.get("page") || "0");
+    const limit = parseInt(url.searchParams.get("limit") || "10");
+
+    const from = page * limit;
+    const to = from + limit - 1;
+
     const cookieStore = await cookies();
     const guestId = cookieStore.get("guest_id")?.value ?? null;
     const supabaseAuth = await createSupabaseAuthClient();
@@ -42,12 +49,15 @@ export async function GET(request: Request, { params }: RouteParams) {
     if (!hasUserAccess && !hasGuestAccess) {
       return NextResponse.json({ error: "Forbidden: No access" }, { status: 403 });
     }
+  
 
+    //messages request
     const { data: messages, error: messagesError } = await supabaseAdmin
       .from("messages")
       .select("*")
       .eq("chat_id", chatId)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false })
+      .range(from, to);
 
     if (messagesError) {
       console.error("Ошибка БД при получении сообщений:", messagesError);

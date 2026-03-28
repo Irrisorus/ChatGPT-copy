@@ -1,59 +1,81 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
-
 import { Loader2 } from "lucide-react";
 import { useMessages } from "@/hooks/use-messages";
 import { ChatInput } from "@/components/Chat/ChatInput";
 import ChatMessage from "@/components/Chat/ChatMessage";
+import ScrollToBottom from "@/components/ScrollToBottom";
 
 export default function ChatPage() {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const observerTarget = useRef<HTMLDivElement>(null);
+
   const params = useParams();
   const chatId = params.id as string;
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { messages, isLoading, sendMessage, isSending } = useMessages(chatId);
+  const { messages, isLoading, sendMessage, isSending, loadMore, hasMore } = useMessages(chatId);
+
+useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    }
+  }, [messages.length]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, isSending]);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoading) {
+          loadMore?.(); 
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasMore, isLoading, loadMore]);
 
   return (
     <div className="flex flex-col h-full w-full overflow-hidden bg-background font-sans antialiased">
-      <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-6 max-w-3xl mx-auto px-4 py-8 md:px-6 md:py-10">
-          
-          {isLoading && (
-            <div className="flex justify-center py-10">
-              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto custom-scrollbar flex flex-col-reverse">
+        <div className="flex flex-col-reverse gap-6 max-w-3xl mx-auto px-4 py-8 md:px-6 md:py-10 w-full">
+          {[...messages].map((msg, index) => (
+            <ChatMessage
+              key={msg.id}
+              msg={msg}
+              isLast={index === 0}
+              isSending={isSending}
+            />
+          ))}
+          {hasMore && (
+            <div ref={observerTarget} className="flex justify-center py-4 w-full">
+              <Loader2 className="size-5 animate-spin text-muted-foreground/50" />
             </div>
           )}
 
           {!isLoading && messages.length === 0 && (
-            <p className="text-center text-muted-foreground py-20 font-medium">
+            <p className="text-center text-muted-foreground py-20 font-medium w-full">
               Начните диалог с Gemini...
             </p>
           )}
-
-          {messages.map((msg, index) => (
-            <ChatMessage
-              key={msg.id}
-              msg={msg}
-              isLast={index === messages.length - 1}
-              isSending={isSending}
-            />
-          ))}
-
-          <div ref={messagesEndRef} className="h-2 shrink-0" />
         </div>
       </div>
 
-      <div className="shrink-0 bg-background">
-        <div className="max-w-3xl mx-auto w-full">
-          <ChatInput 
-            onSend={(content: string) => sendMessage({ chatId, content })} 
-            disabled={isSending} 
+      
+      <div className="shrink-0">
+        <ScrollToBottom containerRef={scrollContainerRef} />
+        <div className="max-w-3xl mx-auto w-full px-4 ">
+          <ChatInput
+            onSend={(content: string) => sendMessage({ chatId, content })}
+            disabled={isSending}
           />
         </div>
       </div>
