@@ -1,10 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createSupabaseAuthClient } from "@/lib/supabase-auth";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { NextResponse } from "next/server";
+import { google } from "@ai-sdk/google";
+import { streamText } from "ai";
 import { cookies } from "next/headers";
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+import { NextResponse } from "next/server";
 
 type RouteParams = {
   params: Promise<{
@@ -16,7 +15,6 @@ export async function GET(request: Request, { params }: RouteParams) {
   try {
     const { id: chatId } = await params;
     const cookieStore = await cookies();
-    
     const guestId = cookieStore.get("guest_id")?.value ?? null;
     const supabaseAuth = await createSupabaseAuthClient();
     const { data: { user } } = await supabaseAuth.auth.getUser();
@@ -49,7 +47,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       .from("messages")
       .select("*")
       .eq("chat_id", chatId)
-      .order("created_at", { ascending: true }); 
+      .order("created_at", { ascending: true });
 
     if (messagesError) {
       console.error("Ошибка БД при получении сообщений:", messagesError);
@@ -66,12 +64,12 @@ export async function GET(request: Request, { params }: RouteParams) {
     );
   }
 }
-export async function POST(request: Request, { params }: RouteParams) {
+
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    
     const { id: chatId } = await params;
     const cookieStore = await cookies();
-    
+
     const body = await request.json().catch(() => null);
     if (!body || typeof body.content !== "string" || !body.content.trim()) {
       return NextResponse.json({ error: "Сообщение не передано" }, { status: 400 });
@@ -80,7 +78,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     const guestId = cookieStore.get("guest_id")?.value ?? null;
     const supabaseAuth = await createSupabaseAuthClient();
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    const { data: { user } } = await supabaseAuth.auth.getUser();
 
     const isAuthenticated = !!user;
     const isGuest = !isAuthenticated && !!guestId;
@@ -114,7 +112,6 @@ export async function POST(request: Request, { params }: RouteParams) {
         .eq("role", "user");
 
       if ((count ?? 0) >= 3) {
-        // TODO: Add toast
         return NextResponse.json({ error: "Limit reached" }, { status: 403 });
       }
     }
@@ -125,30 +122,31 @@ export async function POST(request: Request, { params }: RouteParams) {
       content,
     });
 
+    const result = await streamText({
+      model: google("gemini-2.5-flash"), 
+      prompt: content,
+      onFinish: async ({ text }) => {
+        try {
+          const now = new Date().toISOString();
+          await supabaseAdmin.from("messages").insert({
+            chat_id: chatId,
+            role: "assistant",
+            content: text,
+          });
+
+          await supabaseAdmin
+            .from("chats")
+            .update({ last_message_at: now, updated_at: now })
+            .eq("id", chatId);
+
+        } catch (e) {
+          console.error("Ошибка при сохранении ответа ИИ:", e);
+        }
+      },
+    });
+
    
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const result = await model.generateContent(content);
-    const aiResponse = result.response.text();
-
-    const { data: assistantMsg, error: aiSaveError } = await supabaseAdmin
-      .from("messages")
-      .insert({
-        chat_id: chatId,
-        role: "assistant",
-        content: aiResponse,
-      })
-      .select("id, chat_id, role, content, created_at")
-      .single();
-
-    if (aiSaveError) throw aiSaveError;
-
-    const now = new Date().toISOString();
-    await supabaseAdmin
-      .from("chats")
-      .update({ last_message_at: now, updated_at: now })
-      .eq("id", chatId);
-
-    return NextResponse.json(assistantMsg);
+    return result.toTextStreamResponse();
 
   } catch (error: any) {
     console.error("Route Error:", error);

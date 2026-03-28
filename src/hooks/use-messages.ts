@@ -1,5 +1,6 @@
-import { Message } from "@/types"; 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Message } from "@/types";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 async function fetchMessages(chatId: string): Promise<Message[]> {
   const res = await fetch(`/api/chats/${chatId}/messages`);
@@ -7,23 +8,9 @@ async function fetchMessages(chatId: string): Promise<Message[]> {
   return res.json();
 }
 
-async function sendMessage({ chatId, content }: { chatId: string, content: string }): Promise<Message> {
-  const res = await fetch(`/api/chats/${chatId}/messages`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content }),
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json();
-    throw new Error(errorData.error || "Failed to send message");
-  }
-
-  return res.json();
-}
-
 export function useMessages(chatId: string) {
   const queryClient = useQueryClient();
+  const [isSending, setIsSending] = useState(false);
 
   const messagesQuery = useQuery({
     queryKey: ["messages", chatId],
@@ -31,43 +18,84 @@ export function useMessages(chatId: string) {
     enabled: !!chatId,
   });
 
-  const sendMessageMutation = useMutation({
-    mutationFn: sendMessage,
-    
-    onMutate: async (newMessage) => {
-      await queryClient.cancelQueries({ queryKey: ["messages", chatId] });
-      const previousMessages = queryClient.getQueryData<Message[]>(["messages", chatId]);
-      queryClient.setQueryData<Message[]>(["messages", chatId], (old = []) => [
-        ...old,
-        {
-          id: crypto.randomUUID(),
-          chat_id: chatId,
-          role: "user",
-          content: newMessage.content,
-          created_at: new Date().toISOString(),
-        } as Message,
-      ]);
+  const sendMessage = async ({ chatId, content }: { chatId: string; content: string }) => {
+    if (!content.trim() || isSending) return;
 
-      return { previousMessages };
-    },
+    setIsSending(true);
 
-    onError: (err, newMessage, context) => {
-      if (context?.previousMessages) {
-        queryClient.setQueryData(["messages", chatId], context.previousMessages);
+    const userMsgId = crypto.randomUUID();
+    const assistantMsgId = crypto.randomUUID();
+    const previousMessages = queryClient.getQueryData<Message[]>(["messages", chatId]);
+
+    queryClient.setQueryData<Message[]>(["messages", chatId], (old = []) => [
+      ...old,
+      {
+        id: userMsgId,
+        chat_id: chatId,
+        role: "user",
+        content: content,
+        created_at: new Date().toISOString(),
+      } as Message,
+      {
+        id: assistantMsgId,
+        chat_id: chatId,
+        role: "assistant",
+        content: "", //will be updated later
+        created_at: new Date().toISOString(),
+      } as Message,
+    ]);
+
+    try {
+      const response = await fetch(`/api/chats/${chatId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to send message");
       }
-      // TODO: add toast
-    },
 
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
+      if (!response.body) return;
+
+      //streaming
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        accumulatedText += chunk;
+
+        queryClient.setQueryData<Message[]>(["messages", chatId], (old = []) =>
+          old.map((msg) =>
+            msg.id === assistantMsgId ? { ...msg, content: accumulatedText } : msg
+          )
+        );
+      }
+
+      // queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
       queryClient.invalidateQueries({ queryKey: ["chats"] });
-    },
-  });
+
+    } catch (error) {
+      console.error("Streaming error:", error);
+      //add toast
+      if (previousMessages) {
+        queryClient.setQueryData(["messages", chatId], previousMessages);
+      }
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   return {
     messages: messagesQuery.data || [],
     isLoading: messagesQuery.isLoading,
-    sendMessage: sendMessageMutation.mutate,
-    isSending: sendMessageMutation.isPending,
+    sendMessage,
+    isSending,
   };
 }

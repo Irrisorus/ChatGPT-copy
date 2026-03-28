@@ -132,3 +132,18 @@
     @apply font-sans;
   }
 }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.typing-cursor {
+  /* display: inline-block; */
+  width: 2px;
+  height: 15px;
+  background-color: currentColor;
+  margin-left: 4px;
+  vertical-align: middle;
+  animation: blink 1s step-start infinite;
+}
