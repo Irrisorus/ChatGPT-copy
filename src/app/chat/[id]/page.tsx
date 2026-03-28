@@ -73,7 +73,6 @@ export default function ChatPage() {
                         ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>,
                         li: ({ children }) => <li>{children}</li>,
                         strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-
                         pre: ({ children }) => (
                           <pre className="overflow-x-auto max-w-full scrollbar-thin">
                             {children}
