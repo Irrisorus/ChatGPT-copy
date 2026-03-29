@@ -18,7 +18,7 @@ export function SidebarChatItem({ id, title, isActive }: SidebarChatItemProps) {
                 isActive={isActive}
                 tooltip={title || "Без названия"}
             >
-                <Link href={`/chat/${id}`}>
+                <Link href={`/chats/chat/${id}`}>
                     <MessageSquare className="size-4" />
                     <span className="truncate">
                         {title || "Новый чат"}

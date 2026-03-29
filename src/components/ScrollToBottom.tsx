@@ -42,7 +42,7 @@ export default function ScrollToBottom({ containerRef }: ScrollToBottomProps) {
       variant="secondary"
       size="icon"
       className={cn(
-        "fixed bottom-24 right-8 rounded-full shadow-lg border animate-in fade-in zoom-in duration-200 z-50",
+        "fixed bottom-24 right-8 rounded-full shadow-lg border animate-in fade-in zoom-in duration-200 z-50 cursor-pointer",
         "bg-background/80 backdrop-blur-sm hover:bg-background"
       )}
       onClick={scrollToBottom}

@@ -32,54 +32,74 @@ export function useMessages(chatId: string) {
 
   const messages = data?.pages.flat() || [];
 
-  const sendMessage = async ({ chatId, content }: { chatId: string; content: string }) => {
-    if (!content.trim() || isSending) return;
+  const sendMessage = async ({ 
+  chatId, 
+  content, 
+  files 
+}: { 
+  chatId: string; 
+  content: string; 
+  files?: File[] 
+}) => {
 
-    setIsSending(true);
+  if ((!content.trim() && (!files || files.length === 0)) || isSending) return;
 
-    const userMsgId = crypto.randomUUID();
-    const assistantMsgId = crypto.randomUUID();
+  setIsSending(true);
 
-    const previousState = queryClient.getQueryData(["messages", chatId]);
+  const userMsgId = crypto.randomUUID();
+  const assistantMsgId = crypto.randomUUID();
+  const previousState = queryClient.getQueryData(["messages", chatId]);
 
-    queryClient.setQueryData(["messages", chatId], (old: any) => {
-      if (!old || !old.pages) return old;
-      
-      const newPages = [...old.pages];
-      newPages[0] = [
-        {
-          id: assistantMsgId,
-          chat_id: chatId,
-          role: "assistant",
-          content: "",
-          created_at: new Date().toISOString(),
-        } as Message,
-        {
-          id: userMsgId,
-          chat_id: chatId,
-          role: "user",
-          content: content,
-          created_at: new Date().toISOString(),
-        } as Message,
-        ...newPages[0],
-      ];
+  const optimisticAttachments = files?.map((file) => ({
+    id: crypto.randomUUID(),
+    file_url: URL.createObjectURL(file), 
+    file_name: file.name,
+    file_type: file.type,
+  })) || [];
 
-      return { ...old, pages: newPages };
+  queryClient.setQueryData(["messages", chatId], (old: any) => {
+    if (!old || !old.pages) return old;
+    const newPages = [...old.pages];
+    newPages[0] = [
+      {
+        id: assistantMsgId,
+        chat_id: chatId,
+        role: "assistant",
+        content: "",
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: userMsgId,
+        chat_id: chatId,
+        role: "user",
+        content: content,
+        created_at: new Date().toISOString(),
+        message_attachments: optimisticAttachments,
+      },
+      ...newPages[0],
+    ];
+    return { ...old, pages: newPages };
+  });
+
+  try {
+    const formData = new FormData();
+    formData.append("content", content);
+    
+    if (files) {
+      files.forEach((file) => formData.append("files", file));
+    }
+
+    const response = await fetch(`/api/chats/${chatId}/messages`, {
+      method: "POST",
+      body: formData,
     });
 
-    try {
-      const response = await fetch(`/api/chats/${chatId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-      });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to send message");
+    }
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to send message");
-      }
-
-      if (!response.body) return;
+    if (!response.body) return;
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -104,7 +124,7 @@ export function useMessages(chatId: string) {
           };
         });
       }
-
+      // queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
       queryClient.invalidateQueries({ queryKey: ["chats"] });
 
     } catch (error) {

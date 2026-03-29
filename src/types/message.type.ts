@@ -1,3 +1,4 @@
+import { Attachment } from "./attachment.type"
 import { Chat } from "./chat.type"
 
 export type MessageRole = "user" | "assistant" | "system"
@@ -8,6 +9,7 @@ export type Message = {
   role: MessageRole
   content: string
   created_at: string
+  message_attachments: Attachment[]
 }
 
 export type ChatWithLastMessage = Chat & {

@@ -4,6 +4,7 @@ import { Chat } from "@/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { getCookie } from "cookies-next"
+import { useRouter } from "next/navigation";
 
 async function fetchChats(): Promise<Chat[]> {
   const res = await fetch("/api/chats");

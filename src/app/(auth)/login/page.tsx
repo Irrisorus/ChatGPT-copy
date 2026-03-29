@@ -45,7 +45,7 @@ export default function AuthPage() {
           });
         } else {
           toast.success("Вход выполнен успешно");
-          router.push("/");
+          router.push("/chats");
           router.refresh();
         }
       }

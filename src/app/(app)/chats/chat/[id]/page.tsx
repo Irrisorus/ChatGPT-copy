@@ -4,7 +4,6 @@ import { useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useMessages } from "@/hooks/use-messages";
-import { ChatInput } from "@/components/Chat/ChatInput";
 import ChatMessage from "@/components/Chat/ChatMessage";
 import ScrollToBottom from "@/components/ScrollToBottom";
 
@@ -17,7 +16,7 @@ export default function ChatPage() {
 
   const { messages, isLoading, sendMessage, isSending, loadMore, hasMore } = useMessages(chatId);
 
-useEffect(() => {
+  useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTo({
         top: 0,
@@ -30,7 +29,7 @@ useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !isLoading) {
-          loadMore?.(); 
+          loadMore?.();
         }
       },
       { threshold: 0.1 }
@@ -69,15 +68,9 @@ useEffect(() => {
         </div>
       </div>
 
-      
+
       <div className="shrink-0">
         <ScrollToBottom containerRef={scrollContainerRef} />
-        <div className="max-w-3xl mx-auto w-full px-4 ">
-          <ChatInput
-            onSend={(content: string) => sendMessage({ chatId, content })}
-            disabled={isSending}
-          />
-        </div>
       </div>
     </div>
   );
