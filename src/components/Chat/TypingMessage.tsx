@@ -2,49 +2,38 @@
 
 import { useEffect, useRef, useState } from "react";
 
-interface TypingMessageProps {
-  content: string;
-}
-
-export default function TypingMessage({ content }: TypingMessageProps) {
+export default function TypingMessage({ content }: { content: string }) {
   const [visibleContent, setVisibleContent] = useState("");
-  const typingTimerRef = useRef<number | null>(null);
-  
-  const targetRef = useRef(content);
-  targetRef.current = content;
+  const contentRef = useRef(content);
 
   useEffect(() => {
-    typingTimerRef.current = window.setInterval(() => {
-      setVisibleContent((prev) => {
-        const target = targetRef.current;
-        
-        if (prev.length >= target.length) {
-          return prev;
-        }
+    contentRef.current = content;
+  }, [content]);
 
-        const remaining = target.slice(prev.length);
-        const newlineIndex = remaining.indexOf("\n");
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setVisibleContent((prev) => {
+        const target = contentRef.current;
+        if (prev.length >= target.length) return prev;
+
+        const diff = target.length - prev.length;
         
-        const step =
-          newlineIndex !== -1 && newlineIndex < 120
-            ? newlineIndex + 1
-            : Math.min(4, remaining.length);
+        let step = 1;
+        if (diff > 100) step = 8;
+        else if (diff > 30) step = 4;
+        else if (diff > 10) step = 2;
 
         return target.slice(0, prev.length + step);
       });
-    }, 16);
+    }, 20); 
 
-    return () => {
-      if (typingTimerRef.current) {
-        window.clearInterval(typingTimerRef.current);
-      }
-    };
-  }, []); 
+    return () => clearInterval(timer);
+  }, []);
 
   return (
-    <div className="whitespace-pre-wrap break-word">
+    <div className="whitespace-pre-wrap break-words leading-relaxed">
       {visibleContent}
-      <span className="typing-cursor" />
+      <span className="inline-block w-1.5 h-4 ml-1 bg-primary/40 animate-pulse align-middle" />
     </div>
   );
 }

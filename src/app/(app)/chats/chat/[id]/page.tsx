@@ -1,76 +1,98 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Loader2 } from "lucide-react";
 import { useMessages } from "@/hooks/use-messages";
 import ChatMessage from "@/components/Chat/ChatMessage";
-import ScrollToBottom from "@/components/ScrollToBottom";
 
 export default function ChatPage() {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const observerTarget = useRef<HTMLDivElement>(null);
-
   const params = useParams();
   const chatId = params.id as string;
 
-  const { messages, isLoading, sendMessage, isSending, loadMore, hasMore } = useMessages(chatId);
+  const {
+    messages,
+    isLoading,
+    isSending,
+    loadMore,
+    hasMore,
+    isLoadingMore,
+  } = useMessages(chatId);
+
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const loadingMoreRef = useRef(false);
+  const [firstItemIndex, setFirstItemIndex] = useState(0);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+
+  const initialIndex = Math.max(0, messages.length - 1);
 
   useEffect(() => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTo({
-        top: 0,
-        behavior: "smooth",
-      });
+    if (messages.length > 0 && isAtBottom) {
+      virtuosoRef.current?.autoscrollToBottom();
     }
-  }, [messages.length]);
+      console.log(messages);
+  }, [messages.length, isAtBottom]);
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoading) {
-          loadMore?.();
-        }
-      },
-      { threshold: 0.1 }
+  if (isLoading && messages.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
     );
-
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
-    }
-
-    return () => observer.disconnect();
-  }, [hasMore, isLoading, loadMore]);
+  }
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden bg-background font-sans antialiased">
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto custom-scrollbar flex flex-col-reverse">
-        <div className="flex flex-col-reverse gap-6 max-w-3xl mx-auto px-4 py-8 md:px-6 md:py-10 w-full">
-          {[...messages].map((msg, index) => (
-            <ChatMessage
-              key={msg.id}
-              msg={msg}
-              isLast={index === 0}
-              isSending={isSending}
-            />
-          ))}
-          {hasMore && (
-            <div ref={observerTarget} className="flex justify-center py-4 w-full">
-              <Loader2 className="size-5 animate-spin text-muted-foreground/50" />
+    <div className="flex h-full w-full flex-col overflow-hidden bg-background font-sans antialiased">
+      <div className="flex-1 min-h-0">
+        <Virtuoso
+          ref={virtuosoRef}
+          style={{ height: "100%" }}
+          data={messages}
+          computeItemKey={(index, message) => message.id}
+          firstItemIndex={10000000}
+          initialTopMostItemIndex={initialIndex}
+          atBottomStateChange={setIsAtBottom} 
+          followOutput={(isAtBottom) => (isAtBottom ? "auto" : false)}
+          increaseViewportBy={{ top: 500, bottom: 500 }}
+          defaultItemHeight={80}
+          startReached={async () => {
+            if (!hasMore || isLoading || isLoadingMore || loadingMoreRef.current) return;
+
+            loadingMoreRef.current = true;
+            try {
+              const added = await loadMore?.();
+              if (added && added > 0) {
+                setFirstItemIndex((prev) => prev - added);
+              }
+            } finally {
+              loadingMoreRef.current = false;
+            }
+          }}
+          components={{
+            Header: () =>
+              isLoadingMore ? (
+                <div className="flex justify-center py-10">
+                  <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : null,
+            Footer: () => <div className="h-4" />,
+            EmptyPlaceholder: () => (
+              <p className="text-center text-muted-foreground py-20 font-medium">
+                Начните диалог с Gemini...
+              </p>
+            ),
+          }}
+          itemContent={(index, msg) => (
+            <div className="max-w-3xl mx-auto px-4 md:px-6 py-3 w-full">
+              <ChatMessage
+                msg={msg}
+                isLast={index === messages.length - 1}
+                isSending={isSending}
+              />
             </div>
           )}
-
-          {!isLoading && messages.length === 0 && (
-            <p className="text-center text-muted-foreground py-20 font-medium w-full">
-              Начните диалог с Gemini...
-            </p>
-          )}
-        </div>
-      </div>
-
-
-      <div className="shrink-0">
-        <ScrollToBottom containerRef={scrollContainerRef} />
+        />
       </div>
     </div>
   );

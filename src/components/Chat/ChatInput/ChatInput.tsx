@@ -1,20 +1,23 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import TextareaAutosize from "react-textarea-autosize";
-import { Button } from "@/components/ui/button";
-import { Paperclip, CornerDownLeft, Image as ImageIcon, Loader2 } from "lucide-react";
+import { useParams } from "next/navigation";
+import { CornerDownLeft, Loader2, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
+
 import { AttachmentList } from "./AttachmentList";
 import { ChatInputToolbar } from "./ChatInputToolbar";
 import { useChatInput } from "@/hooks/use-chat-input";
+import { useMessages } from "@/hooks/use-messages";
 
-type Props = {
-  onSend: (data: { content: string; files: File[] }) => Promise<void> | void;
-  isSending: boolean;
-};
+export function ChatInput() {
+  const { id: chatId } = useParams() as { id: string };
+  
+  // Данные из хука сообщений (API)
+  const { sendMessage, isSending } = useMessages(chatId);
 
-export function ChatInput({ onSend, isSending }: Props) {
+  // Данные из UI-хука (Локальный стейт инпута и файлов)
   const {
     input,
     setInput,
@@ -29,25 +32,36 @@ export function ChatInput({ onSend, isSending }: Props) {
     clear,
   } = useChatInput();
 
+  useEffect(() => {
+    const handleGlobalDrop = (e: any) => {
+      if (e.detail) processFiles(e.detail);
+    };
+    window.addEventListener("global-file-drop", handleGlobalDrop);
+    return () => window.removeEventListener("global-file-drop", handleGlobalDrop);
+  }, [processFiles]);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if ((!input.trim() && attachments.length === 0) || isSending) return;
+    if ((!input.trim() && attachments.length === 0) || isSending || !chatId) return;
 
     const filesToSend = attachments.map((att) => att.file);
     const currentInput = input;
 
     clear();
-    await onSend({ content: currentInput, files: filesToSend });
+    await sendMessage({ 
+      chatId, 
+      content: currentInput, 
+      files: filesToSend 
+    });
   };
 
   return (
     <div className="relative w-full shrink-0">
       <div
         className="absolute -top-20 left-0 right-0 h-20 bg-gradient-to-t from-background to-transparent pointer-events-none z-10"
-        style={{
-          maskImage: "linear-gradient(to top, white, transparent)"
-        }}
+        style={{ maskImage: "linear-gradient(to top, white, transparent)" }}
       />
+
       <div className="w-full bg-background pt-3 pb-4 md:pb-6 px-4">
         <input
           type="file"
@@ -59,7 +73,6 @@ export function ChatInput({ onSend, isSending }: Props) {
             e.target.value = "";
           }}
         />
-
         <input
           type="file"
           multiple
@@ -76,40 +89,34 @@ export function ChatInput({ onSend, isSending }: Props) {
           <div
             className="relative w-full"
             onDragEnter={() => !isSending && setIsDragging(true)}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
             onDragLeave={(e) => {
               if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragging(false);
             }}
             onDrop={(e) => {
               e.preventDefault();
               setIsDragging(false);
-              if (e.dataTransfer.files?.length) {
-                processFiles(Array.from(e.dataTransfer.files));
-              }
+              if (e.dataTransfer.files?.length) processFiles(Array.from(e.dataTransfer.files));
             }}
           >
             {isDragging && (
               <div className="absolute inset-0 z-50 flex flex-col items-center justify-center rounded-2xl bg-background/90 backdrop-blur-sm border-2 border-dashed border-primary text-primary animate-in fade-in zoom-in-95">
                 <Paperclip className="h-8 w-8 mb-2 animate-bounce" />
-                <span className="text-sm font-semibold">Перетащите файлы сюда</span>
+                <span className="text-sm font-semibold">Кидайте сюда</span>
               </div>
             )}
 
-            <div
-              className={cn(
-                "relative flex flex-col w-full rounded-2xl border bg-secondary/30 transition-all shadow-inner p-2.5 gap-2",
-                isSending && "opacity-70 cursor-not-allowed"
-              )}
-            >
+            <div className={cn(
+              "relative flex flex-col w-full rounded-2xl border bg-secondary/30 transition-all shadow-inner p-2.5 gap-2",
+              isSending && "opacity-70 cursor-not-allowed"
+            )}>
+
               <AttachmentList attachments={attachments} onRemove={removeFile} />
 
               <TextareaAutosize
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={isSending ? "Gemini отвечает..." : "Спроси о чем-нибудь..."}
+                placeholder={isSending ? "Gemini думает..." : "Спроси о чем-нибудь..."}
                 className="w-full resize-none bg-transparent px-3 py-2 text-sm focus:outline-none min-h-[40px] max-h-[200px]"
                 autoFocus
                 onKeyDown={(e) => {
@@ -125,7 +132,13 @@ export function ChatInput({ onSend, isSending }: Props) {
                 canSubmit={!!input.trim() || attachments.length > 0}
                 onAttachFiles={() => fileInputRef.current?.click()}
                 onAttachImages={() => imageInputRef.current?.click()}
-                submitIcon={isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CornerDownLeft className="h-4 w-4" />}
+                submitIcon={
+                  isSending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CornerDownLeft className="h-4 w-4" />
+                  )
+                }
               />
             </div>
           </div>
