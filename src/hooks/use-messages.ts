@@ -1,18 +1,25 @@
+import { useChatStore } from "@/store/message.store";
 import { Message } from "@/types";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
-const LIMIT = 10;
+const LIMIT = 20;
 
 async function fetchMessages(chatId: string, page: number): Promise<Message[]> {
   const res = await fetch(`/api/chats/${chatId}/messages?page=${page}&limit=${LIMIT}`);
-  if (!res.ok) throw new Error("Failed to fetch messages");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const error = new Error(data.error || "Ошибка") as any;
+    error.status = res.status;
+    throw error;
+  };
   return res.json();
 }
 
 export function useMessages(chatId: string) {
   const queryClient = useQueryClient();
-  const [isSending, setIsSending] = useState(false);
+  const { isSending, setIsSending } = useChatStore();
 
   const {
     data,
@@ -30,30 +37,46 @@ export function useMessages(chatId: string) {
     enabled: !!chatId,
   });
 
+
   const messages = useMemo(() => {
     const flat = data?.pages.flat() || [];
-    // Важно: если API отдает DESC, reverse() делает порядок хронологическим (0 = старое, length-1 = новое)
-    return [...flat].reverse(); 
+    return [...flat].reverse();
   }, [data?.pages]);
 
+
   const loadMore = async () => {
-    const prevCount = data?.pages.flat().length ?? 0;
-    const result = await fetchNextPage();
-    const nextCount = result.data?.pages.flat().length ?? prevCount;
-    return nextCount - prevCount;
+    try {
+      const result = await fetchNextPage();
+
+      if (result.isError) {
+        throw new Error("Не удалось загрузить старые сообщения");
+      }
+
+      const newPage = result.data?.pages?.at(-1);
+
+      const length = newPage?.length ?? 0;
+      console.log(length);
+
+      return length;
+    } catch (error) {
+      toast.error("Ошибка при загрузке истории");
+      return 0;
+    }
   };
 
   const sendMessage = async ({ chatId, content, files }: { chatId: string; content: string; files?: File[] }) => {
     if ((!content.trim() && (!files || files.length === 0)) || isSending) return;
 
     setIsSending(true);
+    console.log(isSending, '-----------------');
+
     const userMsgId = crypto.randomUUID();
     const assistantMsgId = crypto.randomUUID();
     const previousState = queryClient.getQueryData(["messages", chatId]);
 
     const optimisticAttachments = files?.map((file) => ({
       id: crypto.randomUUID(),
-      file_url: URL.createObjectURL(file), 
+      file_url: URL.createObjectURL(file),
       file_name: file.name,
       file_type: file.type,
     })) || [];
@@ -62,15 +85,13 @@ export function useMessages(chatId: string) {
     queryClient.setQueryData(["messages", chatId], (old: any) => {
       if (!old || !old.pages) return old;
       const newPages = [...old.pages];
-      
-      // Добавляем в начало первой страницы (так как потом мы делаем reverse)
-      // В итоге в массиве messages это будет в самом конце
+
       newPages[0] = [
         {
           id: assistantMsgId,
           chat_id: chatId,
           role: "assistant",
-          content: "", // Пустота для триггера Loader2
+          content: "",
           created_at: new Date().toISOString(),
         },
         {
@@ -87,6 +108,7 @@ export function useMessages(chatId: string) {
       return { ...old, pages: newPages };
     });
 
+    console.log("Current Cache:", queryClient.getQueryData(["messages", chatId]));
     try {
       const formData = new FormData();
       formData.append("content", content);
@@ -97,7 +119,12 @@ export function useMessages(chatId: string) {
         body: formData,
       });
 
-      if (!response.ok) throw new Error("Failed");
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const error = new Error(data.error || "Ошибка") as any;
+        error.status = response.status;
+        throw error;
+      }
       if (!response.body) return;
 
       const reader = response.body.getReader();
@@ -111,28 +138,38 @@ export function useMessages(chatId: string) {
         const chunk = decoder.decode(value, { stream: true });
         accumulatedText += chunk;
 
-        // ОПТИМИЗИРОВАННОЕ ОБНОВЛЕНИЕ СТРИМА
         queryClient.setQueryData(["messages", chatId], (old: any) => {
           if (!old) return old;
           return {
             ...old,
-            pages: old.pages.map((page: Message[], i: number) => {
-              // Обновляем сообщение только в той странице, где оно есть (обычно в первой)
-              if (i !== 0) return page; 
-              return page.map((msg) =>
+            pages: old.pages.map((page: any, i: number) => {
+              if (i !== 0) return page;
+              return page.map((msg: any) =>
                 msg.id === assistantMsgId ? { ...msg, content: accumulatedText } : msg
               );
             }),
           };
         });
       }
-      queryClient.invalidateQueries({ queryKey: ["chats"] });
-    } catch (error) {
-      if (previousState) queryClient.setQueryData(["messages", chatId], previousState);
+    } catch (error: any) {
+      console.error("Stream error:", error);
+      toast.error(error.message || "Ошибка");
+      queryClient.setQueryData(["messages", chatId], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any, i: number) => {
+            if (i !== 0) return page;
+            return page.filter((m: any) => m.id !== assistantMsgId);
+          }),
+        };
+      });
     } finally {
       setIsSending(false);
     }
+
   };
+
 
   return {
     messages,
@@ -140,7 +177,7 @@ export function useMessages(chatId: string) {
     isSending,
     sendMessage,
     loadMore,
-    hasMore:!!hasNextPage,
-    isLoadingMore:
-    isFetchingNextPage };
+    hasMore: !!hasNextPage,
+    isLoadingMore: isFetchingNextPage
+  };
 }

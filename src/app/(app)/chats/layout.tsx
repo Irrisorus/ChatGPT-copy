@@ -31,7 +31,7 @@ export default function ChatsLayout({
             </div>
 
             {isChatPage && (
-              <div className="border-t bg-background/50 backdrop-blur-md">
+              <div className=" backdrop-blur-md">
                 <ChatInput />
               </div>
             )}

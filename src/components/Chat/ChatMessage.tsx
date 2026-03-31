@@ -3,7 +3,7 @@
 import React from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { ExternalLink, FileText, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import TypingMessage from "./TypingMessage";
 import MarkdownMessage from "./MessageMarkdown";
 import { Message } from "@/types";
@@ -19,11 +19,12 @@ function ChatMessage({ msg, isLast, isSending }: ChatMessageProps) {
   const isAssistant = msg.role === "assistant";
   const attachments = msg.message_attachments ?? [];
   const hasContent = msg.content && msg.content.trim().length > 0;
+
+  const isWaiting = isAssistant && isSending && !hasContent;
+  const isTyping = isAssistant  && isSending && hasContent;
   
-  const isWaiting = isAssistant && isLast && isSending && !hasContent;
-  
-  const isTyping = isAssistant && isLast && isSending && hasContent;
   return (
+   
     <div
       className={cn(
         "flex gap-3 w-full mb-4",
@@ -69,7 +70,7 @@ function ChatMessage({ msg, isLast, isSending }: ChatMessageProps) {
                   <span>Gemini думает...</span>
                 </div>
               ) : isTyping ? (
-                <TypingMessage content={msg.content} />
+                <TypingMessage key={msg.id} content={msg.content} />
               ) : (
                 <MarkdownMessage content={msg.content} />
               )}
@@ -88,10 +89,10 @@ function ChatMessage({ msg, isLast, isSending }: ChatMessageProps) {
 export default React.memo(ChatMessage, (prev, next) => {
   return (
     prev.msg.id === next.msg.id &&
-    prev.msg.content === next.msg.content &&
-    prev.msg.role === next.msg.role &&
+    prev.msg.content === next.msg.content && 
+    prev.isSending === next.isSending &&   
     prev.isLast === next.isLast &&
-    prev.isSending === next.isSending &&
-    prev.msg.message_attachments === next.msg.message_attachments
+    prev.msg.role === next.msg.role
   );
 });
+

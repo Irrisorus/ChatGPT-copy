@@ -13,11 +13,9 @@ import { useMessages } from "@/hooks/use-messages";
 
 export function ChatInput() {
   const { id: chatId } = useParams() as { id: string };
-  
-  // Данные из хука сообщений (API)
+
   const { sendMessage, isSending } = useMessages(chatId);
 
-  // Данные из UI-хука (Локальный стейт инпута и файлов)
   const {
     input,
     setInput,
@@ -48,20 +46,15 @@ export function ChatInput() {
     const currentInput = input;
 
     clear();
-    await sendMessage({ 
-      chatId, 
-      content: currentInput, 
-      files: filesToSend 
+    await sendMessage({
+      chatId,
+      content: currentInput,
+      files: filesToSend
     });
   };
 
   return (
-    <div className="relative w-full shrink-0">
-      <div
-        className="absolute -top-20 left-0 right-0 h-20 bg-gradient-to-t from-background to-transparent pointer-events-none z-10"
-        style={{ maskImage: "linear-gradient(to top, white, transparent)" }}
-      />
-
+    <div className="w-full shrink-0">
       <div className="w-full bg-background pt-3 pb-4 md:pb-6 px-4">
         <input
           type="file"
@@ -85,7 +78,10 @@ export function ChatInput() {
           }}
         />
 
-        <form ref={formRef} onSubmit={handleSubmit} className="max-w-3xl mx-auto">
+        <form ref={formRef} onSubmit={handleSubmit} className="max-w-3xl mx-auto relative">
+          <div
+            className="absolute -top-20 left-0 right-0 h-20 bg-gradient-to-t from-background to-transparent pointer-events-none z-10"
+          />
           <div
             className="relative w-full"
             onDragEnter={() => !isSending && setIsDragging(true)}

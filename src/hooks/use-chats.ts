@@ -4,13 +4,15 @@ import { Chat } from "@/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { getCookie } from "cookies-next"
-import { useRouter } from "next/navigation";
 
 async function fetchChats(): Promise<Chat[]> {
   const res = await fetch("/api/chats");
 
   if (!res.ok) {
-    throw new Error("Failed to fetch chats");
+    const data = await res.json().catch(() => ({}));
+    const error = new Error(data.error || "Ошибка") as any;
+    error.status = res.status;
+    throw error;
   }
 
   return res.json();
@@ -26,7 +28,10 @@ async function createChat(title?: string): Promise<Chat> {
   });
 
   if (!res.ok) {
-    throw new Error("Failed to create chat");
+    const data = await res.json().catch(() => ({}));
+    const error = new Error(data.error || "Ошибка") as any;
+    error.status = res.status;
+    throw error;
   }
 
   return res.json();

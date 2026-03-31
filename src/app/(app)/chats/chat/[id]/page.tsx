@@ -1,15 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useCallback, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Loader2 } from "lucide-react";
 import { useMessages } from "@/hooks/use-messages";
 import ChatMessage from "@/components/Chat/ChatMessage";
+import ScrollToBottom from "@/components/ScrollToBottom";
+
+const START_INDEX = 10000;
+const CHUNK_SIZE = 10;
 
 export default function ChatPage() {
   const params = useParams();
   const chatId = params.id as string;
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   const {
     messages,
@@ -21,79 +26,110 @@ export default function ChatPage() {
   } = useMessages(chatId);
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
-  const loadingMoreRef = useRef(false);
-  const [firstItemIndex, setFirstItemIndex] = useState(0);
-  const [isAtBottom, setIsAtBottom] = useState(true);
 
-  const initialIndex = Math.max(0, messages.length - 1);
+  const virtuosoContext = useMemo(() => ({
+    isSending,
+    lastMessageId: messages[messages.length - 1]?.id
+  }), [isSending, messages]);
 
-  useEffect(() => {
-    if (messages.length > 0 && isAtBottom) {
-      virtuosoRef.current?.autoscrollToBottom();
+
+
+  const messageChunks = useMemo(() => {
+    const chunks = [];
+    for (let i = 0; i < messages.length; i += CHUNK_SIZE) {
+      chunks.push(messages.slice(i, i + CHUNK_SIZE));
     }
-      console.log(messages);
-  }, [messages.length, isAtBottom]);
+    return chunks;
+  }, [messages]);
+
+  const handleScrollToBottomClick = useCallback(() => {
+    if (messageChunks.length > 0) {
+      virtuosoRef.current?.scrollToIndex({
+        index: messageChunks.length - 1,
+        behavior: "smooth",
+        align: "end"
+      });
+    }
+  }, [messageChunks.length]);
+
+
+  const firstItemIndex = Math.max(0, START_INDEX - messageChunks.length);
+
+
+  const handleStartReached = useCallback(async () => {
+    if (!hasMore || isLoadingMore || isLoading) return;
+    await loadMore();
+  }, [hasMore, isLoadingMore, isLoading, loadMore]);
+
+  const [initialTopIndex] = useState(() => START_INDEX - 1);
 
   if (isLoading && messages.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        <Loader2 className="animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-background font-sans antialiased">
+    <div className="flex h-full w-full flex-col bg-background relative font-sans">
       <div className="flex-1 min-h-0">
         <Virtuoso
           ref={virtuosoRef}
-          style={{ height: "100%" }}
-          data={messages}
-          computeItemKey={(index, message) => message.id}
-          firstItemIndex={10000000}
-          initialTopMostItemIndex={initialIndex}
-          atBottomStateChange={setIsAtBottom} 
+          style={{ height: "100%", overflowAnchor: "none" }}
+          data={messageChunks}
+          computeItemKey={(_, chunk) => `chunk-${chunk[0]?.id}`}
+          firstItemIndex={firstItemIndex}
+          initialTopMostItemIndex={initialTopIndex}
+          context={virtuosoContext}
+          defaultItemHeight={2500}
           followOutput={(isAtBottom) => (isAtBottom ? "auto" : false)}
-          increaseViewportBy={{ top: 500, bottom: 500 }}
-          defaultItemHeight={80}
-          startReached={async () => {
-            if (!hasMore || isLoading || isLoadingMore || loadingMoreRef.current) return;
-
-            loadingMoreRef.current = true;
-            try {
-              const added = await loadMore?.();
-              if (added && added > 0) {
-                setFirstItemIndex((prev) => prev - added);
-              }
-            } finally {
-              loadingMoreRef.current = false;
-            }
+          startReached={handleStartReached}
+          increaseViewportBy={{ top: 2000, bottom: 500 }}
+          atBottomThreshold={200}
+          atBottomStateChange={(atBottom) => {
+            setShowScrollToBottom(!atBottom)
           }}
+
           components={{
-            Header: () =>
-              isLoadingMore ? (
-                <div className="flex justify-center py-10">
-                  <Loader2 className="size-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : null,
-            Footer: () => <div className="h-4" />,
+            Header: () => (
+              <div className="h-14 flex items-center justify-center">
+                {isLoadingMore && <Loader2 className="size-5 animate-spin text-muted-foreground" />}
+              </div>
+            ),
+            Footer: () => <div className="h-6" />,
             EmptyPlaceholder: () => (
               <p className="text-center text-muted-foreground py-20 font-medium">
                 Начните диалог с Gemini...
               </p>
             ),
           }}
-          itemContent={(index, msg) => (
-            <div className="max-w-3xl mx-auto px-4 md:px-6 py-3 w-full">
-              <ChatMessage
-                msg={msg}
-                isLast={index === messages.length - 1}
-                isSending={isSending}
-              />
+
+          itemContent={(index, chunk, context) => (
+            <div className="flex flex-col w-full">
+              {chunk.map((msg) => {
+                const isLastInChat = msg.id === context.lastMessageId;
+                const isMsgSending = isLastInChat ? context.isSending : false;
+
+                return (
+                  <div key={msg.id} className="max-w-3xl mx-auto px-4 md:px-6 py-3 w-full">
+                    <ChatMessage
+                      msg={msg}
+                      isLast={isLastInChat}
+                      isSending={isMsgSending}
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
         />
       </div>
+      <ScrollToBottom
+        isVisible={showScrollToBottom}
+        onClick={handleScrollToBottomClick}
+      />
     </div>
+
   );
 }

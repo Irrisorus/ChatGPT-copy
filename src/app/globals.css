@@ -167,3 +167,12 @@
 ::-webkit-scrollbar-button {
   display: none;
 }
+
+[data-virtuoso-scroller="true"] {
+  overflow-anchor: none !important;
+  scroll-behavior: auto !important;
+}
+
+.virtuoso-item-class {
+  contain: layout; 
+}
