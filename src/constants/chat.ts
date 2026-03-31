@@ -1,0 +1,10 @@
+export const VIRTUOSO_CONFIG = {
+  START_INDEX: 10000,
+  CHUNK_SIZE: 10,
+  INITIAL_ITEM_HEIGHT: 200,
+  VIEWPORT_ADJUSTMENT: {
+    top: 2000,
+    bottom: 500,
+  },
+  AT_BOTTOM_THRESHOLD: 200,
+}

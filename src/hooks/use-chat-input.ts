@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMessages } from "@/hooks/use-messages";
 import { useChats } from "@/hooks/use-chats";
+import { useFileStore } from "@/store/use-file.store";
 
 type FileAttachment = {
     file: File;
@@ -13,8 +14,11 @@ type FileAttachment = {
 export function useChatInput() {
     const router = useRouter();
     const { id: chatId } = useParams() as { id?: string };
+
     const { createChat, isCreating } = useChats();
     const { sendMessage, isSending } = useMessages(chatId || "");
+
+    const setPendingFiles = useFileStore((state) => state.setPendingFiles);
 
     const [input, setInput] = useState("");
     const [attachments, setAttachments] = useState<FileAttachment[]>([]);
@@ -24,6 +28,7 @@ export function useChatInput() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
 
+    
     const clear = () => {
         attachments.forEach((att) => {
             if (att.previewUrl) URL.revokeObjectURL(att.previewUrl);
@@ -32,6 +37,7 @@ export function useChatInput() {
         setInput("");
     };
 
+   
     const processFiles = (newFiles: File[]) => {
         const newAttachments = newFiles.map((file) => ({
             file,
@@ -40,10 +46,13 @@ export function useChatInput() {
         setAttachments((prev) => [...prev, ...newAttachments]);
     };
 
+  
     const removeFile = (index: number) => {
         setAttachments((prev) => {
             const newAtts = [...prev];
-            if (newAtts[index].previewUrl) URL.revokeObjectURL(newAtts[index].previewUrl);
+            if (newAtts[index].previewUrl) {
+                URL.revokeObjectURL(newAtts[index].previewUrl);
+            }
             newAtts.splice(index, 1);
             return newAtts;
         });
@@ -61,15 +70,21 @@ export function useChatInput() {
         e?.preventDefault();
 
         const isActiveSending = isSending || isCreating;
+
         if ((!input.trim() && attachments.length === 0) || isActiveSending) return;
 
         const filesToSend = attachments.map((att) => att.file);
         const currentInput = input;
 
         if (!chatId) {
-            createChat(currentInput.slice(0, 40), {
+            if (filesToSend.length > 0) {
+                setPendingFiles(filesToSend);
+            }
+
+            createChat(currentInput.slice(0, 40) || "Новый чат", {
                 onSuccess: (newChat) => {
                     clear();
+                 
                     router.push(`/chats/chat/${newChat.id}?firstMsg=${encodeURIComponent(currentInput)}`);
                 },
             });
@@ -82,6 +97,9 @@ export function useChatInput() {
             });
         }
     };
+
+    const isDisabled = isSending || isCreating;
+    const canSubmit = input.trim().length > 0 || attachments.length > 0;
 
     return {
         input,
@@ -96,7 +114,8 @@ export function useChatInput() {
         removeFile,
         clear,
         handleSubmit,
-        isDisabled: isSending || isCreating,
+        isDisabled,
         isSending,
+        canSubmit
     };
 }

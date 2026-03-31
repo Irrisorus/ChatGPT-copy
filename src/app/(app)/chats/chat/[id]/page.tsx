@@ -1,96 +1,55 @@
 "use client";
 
-import { useRef, useCallback, useState, useMemo, useEffect } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useRef, useCallback, useState, useMemo } from "react";
+import { useParams } from "next/navigation";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Loader2 } from "lucide-react";
+
 import { useMessages } from "@/hooks/use-messages";
+import { useInitialMessage } from "@/hooks/use-initial-message";
+import { chunkArray } from "@/lib/utils";
+
 import ChatMessage from "@/components/Chat/ChatMessage";
 import ScrollToBottom from "@/components/ScrollToBottom";
-
-const START_INDEX = 10000;
-const CHUNK_SIZE = 10;
+import { useChatStore } from "@/store/message.store";
+import { VIRTUOSO_CONFIG } from "@/constants/chat";
 
 export default function ChatPage() {
-  const searchParams = useSearchParams();
-  const params = useParams();
-  const chatId = params.id as string;
+  const { id: chatId } = useParams() as { id: string };
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
-  const {
-    messages,
-    isLoading,
-    isSending,
-    loadMore,
-    hasMore,
-    isLoadingMore,
-    sendMessage
-  } = useMessages(chatId);
+  const { isSending: isGlobalSending } = useChatStore();
+  const { messages, isLoading, loadMore, hasMore, isLoadingMore, sendMessage } = useMessages(chatId);
 
-  const hasSentFirstMsg = useRef(false);
+  useInitialMessage(chatId, isLoading, sendMessage);
 
-  useEffect(() => {
-    const firstMsg = searchParams.get("firstMsg");
-    
-    if (firstMsg && !hasSentFirstMsg.current && !isLoading) {
-      hasSentFirstMsg.current = true;
+  const messageChunks = useMemo(
+    () => chunkArray(messages, VIRTUOSO_CONFIG.CHUNK_SIZE),
+    [messages]
+  );
 
-      sendMessage({
-        chatId,
-        content: decodeURIComponent(firstMsg),
-      });
-
-      const newPath = window.location.pathname;
-      window.history.replaceState(null, "", newPath);
-    }
-  }, [searchParams, chatId, sendMessage, isLoading]);
-
-
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
-
-  
   const virtuosoContext = useMemo(() => ({
-    isSending,
+    isSending: isGlobalSending,
     lastMessageId: messages[messages.length - 1]?.id
-  }), [isSending, messages]);
-
-
-
-  const messageChunks = useMemo(() => {
-    const chunks = [];
-    for (let i = 0; i < messages.length; i += CHUNK_SIZE) {
-      chunks.push(messages.slice(i, i + CHUNK_SIZE));
-    }
-    return chunks;
-  }, [messages]);
+  }), [isGlobalSending, messages]);
 
   const handleScrollToBottomClick = useCallback(() => {
-    if (messageChunks.length > 0) {
-      virtuosoRef.current?.scrollToIndex({
-        index: messageChunks.length - 1,
-        behavior: "smooth",
-        align: "end"
-      });
-    }
+    virtuosoRef.current?.scrollToIndex({
+      index: messageChunks.length - 1,
+      behavior: "smooth",
+      align: "end"
+    });
   }, [messageChunks.length]);
 
-
-  const firstItemIndex = Math.max(0, START_INDEX - messageChunks.length);
-
-
   const handleStartReached = useCallback(async () => {
-    if (!hasMore || isLoadingMore || isLoading) return;
-    await loadMore();
+    if (hasMore && !isLoadingMore && !isLoading) {
+      await loadMore();
+    }
   }, [hasMore, isLoadingMore, isLoading, loadMore]);
 
-  const [initialTopIndex] = useState(() => START_INDEX - 1);
-
   if (isLoading && messages.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <div className="flex h-full items-center justify-center"><Loader2 className="animate-spin" /></div>;
   }
 
   return (
@@ -98,60 +57,30 @@ export default function ChatPage() {
       <div className="flex-1 min-h-0">
         <Virtuoso
           ref={virtuosoRef}
-          style={{ height: "100%", overflowAnchor: "none" }}
           data={messageChunks}
-          computeItemKey={(_, chunk) => `chunk-${chunk[0]?.id}`}
-          firstItemIndex={firstItemIndex}
-          initialTopMostItemIndex={initialTopIndex}
           context={virtuosoContext}
-          defaultItemHeight={2500}
-          followOutput={(isAtBottom) => (isAtBottom ? "auto" : false)}
+          firstItemIndex={Math.max(0, VIRTUOSO_CONFIG.START_INDEX - messageChunks.length)}
+          initialTopMostItemIndex={VIRTUOSO_CONFIG.START_INDEX - 1}
+          increaseViewportBy={VIRTUOSO_CONFIG.VIEWPORT_ADJUSTMENT}
+          atBottomThreshold={VIRTUOSO_CONFIG.AT_BOTTOM_THRESHOLD}
           startReached={handleStartReached}
-          increaseViewportBy={{ top: 2000, bottom: 500 }}
-          atBottomThreshold={200}
-          atBottomStateChange={(atBottom) => {
-            setShowScrollToBottom(!atBottom)
-          }}
-
-          components={{
-            Header: () => (
-              <div className="h-14 flex items-center justify-center">
-                {isLoadingMore && <Loader2 className="size-5 animate-spin text-muted-foreground" />}
-              </div>
-            ),
-            Footer: () => <div className="h-6" />,
-            EmptyPlaceholder: () => (
-              <p className="text-center text-muted-foreground py-20 font-medium">
-                Начните диалог с Gemini...
-              </p>
-            ),
-          }}
-
+          atBottomStateChange={(atBottom) => setShowScrollToBottom(!atBottom)}
           itemContent={(index, chunk, context) => (
             <div className="flex flex-col w-full">
-              {chunk.map((msg) => {
-                const isLastInChat = msg.id === context.lastMessageId;
-                const isMsgSending = isLastInChat ? context.isSending : false;
-
-                return (
-                  <div key={msg.id} className="max-w-3xl mx-auto px-4 md:px-6 py-3 w-full">
-                    <ChatMessage
-                      msg={msg}
-                      isLast={isLastInChat}
-                      isSending={isMsgSending}
-                    />
-                  </div>
-                );
-              })}
+              {chunk.map((msg) => (
+                <div key={msg.id} className="max-w-3xl mx-auto px-4 md:px-6 py-3 w-full">
+                  <ChatMessage 
+                    msg={msg} 
+                    isLast={msg.id === context.lastMessageId} 
+                    isSending={msg.id === context.lastMessageId ? context.isSending : false} 
+                  />
+                </div>
+              ))}
             </div>
           )}
         />
       </div>
-      <ScrollToBottom
-        isVisible={showScrollToBottom}
-        onClick={handleScrollToBottomClick}
-      />
+      <ScrollToBottom isVisible={showScrollToBottom} onClick={handleScrollToBottomClick} />
     </div>
-
   );
 }

@@ -23,7 +23,8 @@ export function ChatInput() {
     removeFile,
     handleSubmit,
     isDisabled,
-    isSending
+    isSending,
+    canSubmit
   } = useChatInput();
 
   return (
@@ -97,7 +98,7 @@ export function ChatInput() {
 
               <ChatInputToolbar
                 isSending={isDisabled}
-                canSubmit={!!input.trim()}
+                canSubmit={canSubmit}
                 onAttachFiles={() => fileInputRef.current?.click()}
                 onAttachImages={() => imageInputRef.current?.click()}
                 submitIcon={
