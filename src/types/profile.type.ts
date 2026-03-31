@@ -6,3 +6,4 @@ export type Profile = {
 }
 
 
+export type AuthMode = "login" | "register";

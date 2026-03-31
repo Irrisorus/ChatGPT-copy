@@ -29,7 +29,6 @@ export function ChatInput() {
   return (
     <div className="w-full shrink-0">
       <div className="w-full bg-background pt-3 pb-4 md:pb-6 px-4">
-        {/* Скрытые инпуты */}
         <input
           type="file"
           multiple
@@ -98,7 +97,7 @@ export function ChatInput() {
 
               <ChatInputToolbar
                 isSending={isDisabled}
-                canSubmit={!!input.trim() || attachments.length > 0}
+                canSubmit={!!input.trim()}
                 onAttachFiles={() => fileInputRef.current?.click()}
                 onAttachImages={() => imageInputRef.current?.click()}
                 submitIcon={
