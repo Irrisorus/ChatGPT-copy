@@ -12,7 +12,10 @@ export default function ChatsLayout({
 }) {
   const segments = useSelectedLayoutSegments();
 
-  const isChatPage = segments[0] === "chat" && !!segments[1];
+  const isChatRoot = segments.length === 0; 
+  const isSpecificChat = segments[0] === "chat" && !!segments[1];
+
+  const shouldShowInput = isChatRoot || isSpecificChat;
 
   return (
     <SidebarProvider>
@@ -30,7 +33,7 @@ export default function ChatsLayout({
               {children}
             </div>
 
-            {isChatPage && (
+            {shouldShowInput && (
               <div className=" backdrop-blur-md">
                 <ChatInput />
               </div>

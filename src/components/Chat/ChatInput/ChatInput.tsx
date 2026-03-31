@@ -1,21 +1,15 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React from "react";
 import TextareaAutosize from "react-textarea-autosize";
-import { useParams } from "next/navigation";
 import { CornerDownLeft, Loader2, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { AttachmentList } from "./AttachmentList";
 import { ChatInputToolbar } from "./ChatInputToolbar";
 import { useChatInput } from "@/hooks/use-chat-input";
-import { useMessages } from "@/hooks/use-messages";
 
 export function ChatInput() {
-  const { id: chatId } = useParams() as { id: string };
-
-  const { sendMessage, isSending } = useMessages(chatId);
-
   const {
     input,
     setInput,
@@ -27,35 +21,15 @@ export function ChatInput() {
     imageInputRef,
     processFiles,
     removeFile,
-    clear,
+    handleSubmit,
+    isDisabled,
+    isSending
   } = useChatInput();
-
-  useEffect(() => {
-    const handleGlobalDrop = (e: any) => {
-      if (e.detail) processFiles(e.detail);
-    };
-    window.addEventListener("global-file-drop", handleGlobalDrop);
-    return () => window.removeEventListener("global-file-drop", handleGlobalDrop);
-  }, [processFiles]);
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if ((!input.trim() && attachments.length === 0) || isSending || !chatId) return;
-
-    const filesToSend = attachments.map((att) => att.file);
-    const currentInput = input;
-
-    clear();
-    await sendMessage({
-      chatId,
-      content: currentInput,
-      files: filesToSend
-    });
-  };
 
   return (
     <div className="w-full shrink-0">
       <div className="w-full bg-background pt-3 pb-4 md:pb-6 px-4">
+        {/* Скрытые инпуты */}
         <input
           type="file"
           multiple
@@ -79,12 +53,11 @@ export function ChatInput() {
         />
 
         <form ref={formRef} onSubmit={handleSubmit} className="max-w-3xl mx-auto relative">
-          <div
-            className="absolute -top-20 left-0 right-0 h-20 bg-gradient-to-t from-background to-transparent pointer-events-none z-10"
-          />
+          <div className="absolute -top-20 left-0 right-0 h-20 bg-gradient-to-t from-background to-transparent pointer-events-none z-10" />
+          
           <div
             className="relative w-full"
-            onDragEnter={() => !isSending && setIsDragging(true)}
+            onDragEnter={() => !isDisabled && setIsDragging(true)}
             onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
             onDragLeave={(e) => {
               if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragging(false);
@@ -104,19 +77,19 @@ export function ChatInput() {
 
             <div className={cn(
               "relative flex flex-col w-full rounded-2xl border bg-secondary/30 transition-all shadow-inner p-2.5 gap-2",
-              isSending && "opacity-70 cursor-not-allowed"
+              isDisabled && "opacity-70 cursor-not-allowed"
             )}>
-
               <AttachmentList attachments={attachments} onRemove={removeFile} />
 
               <TextareaAutosize
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={isSending ? "Gemini думает..." : "Спроси о чем-нибудь..."}
+                placeholder={isDisabled ? "Gemini думает..." : "Спроси о чем-нибудь..."}
                 className="w-full resize-none bg-transparent px-3 py-2 text-sm focus:outline-none min-h-[40px] max-h-[200px]"
                 autoFocus
+                disabled={isDisabled}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !isSending) {
+                  if (e.key === "Enter" && !e.shiftKey && !isDisabled) {
                     e.preventDefault();
                     formRef.current?.requestSubmit();
                   }
@@ -124,7 +97,7 @@ export function ChatInput() {
               />
 
               <ChatInputToolbar
-                isSending={isSending}
+                isSending={isDisabled}
                 canSubmit={!!input.trim() || attachments.length > 0}
                 onAttachFiles={() => fileInputRef.current?.click()}
                 onAttachImages={() => imageInputRef.current?.click()}

@@ -40,7 +40,7 @@ export function AppSidebar() {
         <Sidebar variant="sidebar" collapsible="icon" className="border-r">
             <SidebarHeader className="pt-4">
                 <SidebarNewChatButton
-                    onClick={() => createChat("Новый чат")}
+                    onClick={() => router.push("/chats")}
                     isLoading={isCreating}
                 />
             </SidebarHeader>

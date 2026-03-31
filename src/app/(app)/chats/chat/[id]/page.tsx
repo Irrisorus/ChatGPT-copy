@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useCallback, useState, useMemo } from "react";
-import { useParams } from "next/navigation";
+import { useRef, useCallback, useState, useMemo, useEffect } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Loader2 } from "lucide-react";
 import { useMessages } from "@/hooks/use-messages";
@@ -12,6 +12,7 @@ const START_INDEX = 10000;
 const CHUNK_SIZE = 10;
 
 export default function ChatPage() {
+  const searchParams = useSearchParams();
   const params = useParams();
   const chatId = params.id as string;
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
@@ -23,10 +24,31 @@ export default function ChatPage() {
     loadMore,
     hasMore,
     isLoadingMore,
+    sendMessage
   } = useMessages(chatId);
+
+  const hasSentFirstMsg = useRef(false);
+
+  useEffect(() => {
+    const firstMsg = searchParams.get("firstMsg");
+    
+    if (firstMsg && !hasSentFirstMsg.current && !isLoading) {
+      hasSentFirstMsg.current = true;
+
+      sendMessage({
+        chatId,
+        content: decodeURIComponent(firstMsg),
+      });
+
+      const newPath = window.location.pathname;
+      window.history.replaceState(null, "", newPath);
+    }
+  }, [searchParams, chatId, sendMessage, isLoading]);
+
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
+  
   const virtuosoContext = useMemo(() => ({
     isSending,
     lastMessageId: messages[messages.length - 1]?.id
