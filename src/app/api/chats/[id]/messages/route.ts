@@ -135,7 +135,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     const result = await streamText({
-      model: google("gemini-3.1-flash-lite"), 
+      model: google("gemini-3-flash-preview"), 
       messages: [
         {
           role: "user",

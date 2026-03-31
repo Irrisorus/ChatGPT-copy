@@ -99,7 +99,7 @@ export function useChatInput() {
     };
 
     const isDisabled = isSending || isCreating;
-    const canSubmit = input.trim().length > 0 || attachments.length > 0;
+    const canSubmit = input.trim().length > 0
 
     return {
         input,
