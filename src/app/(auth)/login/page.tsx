@@ -42,7 +42,7 @@ export default function AuthPage() {
       } else {
         if (mode === "register" && !data.session) {
           toast.success("Успешно!", {
-            description: "Проверьте почту для подтверждения аккаунта.",
+            description: "Аккаунт создан, войдите в него",
             duration: 5000,
           });
         } else {
